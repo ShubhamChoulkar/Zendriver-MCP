@@ -82,6 +82,10 @@ class BrowserSession:
         if self._browser is None:
             args = browser_args or []
 
+            import os
+            ublock_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "extensions", "ublock")
+            args.append("--load-extension=" + ublock_path)
+
             if proxy:
                 parsed = urlparse(proxy)
                 if parsed.username:
