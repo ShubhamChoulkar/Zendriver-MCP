@@ -1,4 +1,5 @@
-# utility tools - screenshot, js execution, waiting, security audit
+# utility tools - screenshot, js execution, waiting, security audit, downloads
+import base64
 import io
 import json
 import os
@@ -18,9 +19,12 @@ class UtilityTools(ToolBase):
     def _register_tools(self) -> None:
         """register utility tools"""
         self._mcp.tool()(self.screenshot)
+        self._mcp.tool()(self.screenshot_element)
         self._mcp.tool()(self.execute_js)
         self._mcp.tool()(self.wait)
         self._mcp.tool()(self.wait_for_element)
+        self._mcp.tool()(self.wait_for_text)
+        self._mcp.tool()(self.download_file)
         self._mcp.tool()(self.run_security_audit)
 
     async def screenshot(self, save_path: Optional[str] = None) -> Image:
@@ -61,6 +65,71 @@ class UtilityTools(ToolBase):
                         # Save as JPEG for .jpg/.jpeg or unknown
                         with open(save_path, 'wb') as f:
                             f.write(jpeg_data)
+
+                return Image(data=jpeg_data, format="jpeg")
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    async def screenshot_element(self, selector: str, save_path: Optional[str] = None) -> Image:
+        """Take a screenshot of a specific element on the page.
+
+        Args:
+            selector: CSS selector of the element to capture
+            save_path: Optional path to save the screenshot
+        """
+        if selector.isdigit():
+            selector = f'[data-zendriver-id="{selector}"]'
+
+        safe_sel = self.escape_js_string(selector)
+
+        # Get element bounding rect
+        rect = await self.run_js(f'''
+            (function() {{
+                const el = document.querySelector("{safe_sel}");
+                if (!el) return null;
+                const r = el.getBoundingClientRect();
+                return {{ x: Math.round(r.x), y: Math.round(r.y),
+                          w: Math.round(r.width), h: Math.round(r.height) }};
+            }})()
+        ''')
+
+        if not rect:
+            img = PILImage.new("RGB", (400, 100), color=(200, 50, 50))
+            buffer = io.BytesIO()
+            img.save(buffer, format="JPEG")
+            return Image(data=buffer.getvalue(), format="jpeg")
+
+        # Take full screenshot then crop
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            await self.session.page.save_screenshot(tmp_path)
+            with PILImage.open(tmp_path) as img:
+                # Crop to element bounds (account for device pixel ratio)
+                dpr = await self.run_js('window.devicePixelRatio || 1') or 1
+                crop_box = (
+                    int(rect['x'] * dpr),
+                    int(rect['y'] * dpr),
+                    int((rect['x'] + rect['w']) * dpr),
+                    int((rect['y'] + rect['h']) * dpr)
+                )
+                # Clamp to image bounds
+                crop_box = (
+                    max(0, crop_box[0]),
+                    max(0, crop_box[1]),
+                    min(img.width, crop_box[2]),
+                    min(img.height, crop_box[3])
+                )
+                cropped = img.crop(crop_box)
+                buffer = io.BytesIO()
+                cropped.convert("RGB").save(buffer, format="JPEG", quality=75)
+                jpeg_data = buffer.getvalue()
+
+                if save_path:
+                    with open(save_path, 'wb') as f:
+                        f.write(jpeg_data)
 
                 return Image(data=jpeg_data, format="jpeg")
         finally:
@@ -170,6 +239,28 @@ class UtilityTools(ToolBase):
 
         hint = f" ({suggestions})" if suggestions else ""
         return f"Timeout: Element not found after {timeout}s: {selector}{hint}"
+
+    async def wait_for_text(self, text: str, timeout: float = 10.0) -> str:
+        """Wait for specific text to appear on the page.
+
+        Args:
+            text: Text content to wait for
+            timeout: Maximum time to wait in seconds
+        """
+        safe_text = self.escape_js_string(text)
+
+        async def check():
+            try:
+                found = await self.run_js(f'''
+                    document.body.innerText.includes("{safe_text}")
+                ''')
+                return bool(found)
+            except Exception:
+                return False
+
+        if await self.wait_for_condition(check, timeout):
+            return f"Text found: '{text}'"
+        return f"Timeout: Text '{text}' not found after {timeout}s"
 
     async def run_security_audit(self) -> str:
         """Run a comprehensive security audit on the current page.
@@ -315,3 +406,47 @@ class UtilityTools(ToolBase):
             lines.append(f"RESULT: ALL {passes} CHECKS PASSED")
 
         return "\n".join(lines)
+
+    async def download_file(self, url: str, save_path: str) -> str:
+        """Download a file using the browser's authenticated session.
+
+        Uses the browser's cookies and session, so works for authenticated downloads
+        (files behind login, API endpoints, etc.).
+
+        Args:
+            url: URL of the file to download
+            save_path: Local path to save the downloaded file
+        """
+        safe_url = self.escape_js_string(url)
+
+        result = await self.run_js(f'''
+            (async function() {{
+                try {{
+                    const resp = await fetch("{safe_url}");
+                    if (!resp.ok) return {{ error: resp.status + " " + resp.statusText }};
+                    const blob = await resp.blob();
+                    const reader = new FileReader();
+                    return new Promise(resolve => {{
+                        reader.onload = () => resolve({{
+                            data: reader.result.split(",")[1],
+                            type: blob.type,
+                            size: blob.size
+                        }});
+                        reader.readAsDataURL(blob);
+                    }});
+                }} catch(e) {{
+                    return {{ error: e.message }};
+                }}
+            }})()
+        ''')
+
+        if not result or result.get('error'):
+            return f"Download failed: {result.get('error', 'Unknown error') if result else 'No response'}"
+
+        file_data = base64.b64decode(result['data'])
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        with open(save_path, 'wb') as f:
+            f.write(file_data)
+
+        size_kb = len(file_data) / 1024
+        return f"Downloaded to {save_path} ({size_kb:.1f} KB, type: {result['type']})"

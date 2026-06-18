@@ -22,6 +22,8 @@ class BrowserSession:
     _console_logs: List[Dict[str, Any]] = []
     _pending_requests: Dict[str, Dict[str, Any]] = {}
     _cdp_enabled_tabs: Dict[int, bool] = {}  # Track tabs with CDP listeners
+    _recording: bool = False
+    _recorded_actions: List[Dict[str, Any]] = []
 
     def __new__(cls) -> "BrowserSession":
         if cls._instance is None:
@@ -31,6 +33,8 @@ class BrowserSession:
             cls._console_logs = []
             cls._pending_requests = {}
             cls._cdp_enabled_tabs = {}
+            cls._recording = False
+            cls._recorded_actions = []
         return cls._instance
 
     @classmethod
@@ -110,6 +114,8 @@ class BrowserSession:
             self._console_logs = []
             self._pending_requests = {}
             self._cdp_enabled_tabs = {}
+            self._recording = False
+            self._recorded_actions = []
 
     async def _setup_cdp_listeners(self, tab: zd.Tab) -> None:
         """Set up CDP event listeners for network and console logging."""
@@ -158,7 +164,8 @@ class BrowserSession:
             "status_text": event.response.status_text,
             "type": str(event.type_) if event.type_ else pending.get("type", "unknown"),
             "mime_type": event.response.mime_type,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "_request_id": event.request_id
         }
 
         self._network_logs.append(log_entry)
@@ -288,3 +295,30 @@ class BrowserSession:
         self._network_logs = []
         self._console_logs = []
         self._pending_requests = {}
+
+    async def get_response_body(self, request_id) -> Dict[str, Any]:
+        """Get the response body for a network request via CDP."""
+        try:
+            result = await self._page.send(
+                cdp.network.get_response_body(request_id)
+            )
+            if isinstance(result, tuple):
+                return {"body": result[0], "base64_encoded": result[1]}
+            return {"body": str(result), "base64_encoded": False}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def start_recording(self) -> None:
+        """Start recording browser actions."""
+        self._recording = True
+        self._recorded_actions = []
+
+    def stop_recording(self) -> List[Dict[str, Any]]:
+        """Stop recording and return recorded actions."""
+        self._recording = False
+        return self._recorded_actions.copy()
+
+    def record_action(self, action: str, **kwargs) -> None:
+        """Record an action if recording is active."""
+        if self._recording:
+            self._recorded_actions.append({"action": action, "params": kwargs})

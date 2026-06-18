@@ -12,6 +12,7 @@ from src.tools.storage import StorageTools
 from src.tools.logging import LoggingTools
 from src.tools.forms import FormTools
 from src.tools.utils import UtilityTools
+from src.tools.recording import RecordingTools
 
 # initialize the MCP server
 mcp = FastMCP("Zendriver MCP")
@@ -27,6 +28,7 @@ _storage_tools = StorageTools(mcp)
 _logging_tools = LoggingTools(mcp)
 _form_tools = FormTools(mcp)
 _utility_tools = UtilityTools(mcp)
+_recording_tools = RecordingTools(mcp)
 
 # export individual tool functions for backwards compatibility
 # browser lifecycle
@@ -54,6 +56,9 @@ clear_input = _element_tools.clear_input
 focus_element = _element_tools.focus_element
 select_option = _element_tools.select_option
 upload_file = _element_tools.upload_file
+highlight_element = _element_tools.highlight_element
+hide_element = _element_tools.hide_element
+remove_element = _element_tools.remove_element
 
 # query
 find_element = _query_tools.find_element
@@ -67,6 +72,9 @@ find_inputs = _query_tools.find_inputs
 get_content = _content_tools.get_content
 get_text_content = _content_tools.get_text_content
 get_interaction_tree = _content_tools.get_interaction_tree
+get_links = _content_tools.get_links
+extract_table = _content_tools.extract_table
+extract_structured_data = _content_tools.extract_structured_data
 scroll = _content_tools.scroll
 scroll_to_element = _content_tools.scroll_to_element
 
@@ -83,6 +91,7 @@ get_console_logs = _logging_tools.get_console_logs
 clear_logs = _logging_tools.clear_logs
 wait_for_network = _logging_tools.wait_for_network
 wait_for_request = _logging_tools.wait_for_request
+get_network_response_body = _logging_tools.get_network_response_body
 
 # forms
 fill_form = _form_tools.fill_form
@@ -93,10 +102,18 @@ mouse_click = _form_tools.mouse_click
 
 # utils
 screenshot = _utility_tools.screenshot
+screenshot_element = _utility_tools.screenshot_element
 execute_js = _utility_tools.execute_js
 wait = _utility_tools.wait
 wait_for_element = _utility_tools.wait_for_element
+wait_for_text = _utility_tools.wait_for_text
+download_file = _utility_tools.download_file
 run_security_audit = _utility_tools.run_security_audit
+
+# recording
+start_recording = _recording_tools.start_recording
+stop_recording = _recording_tools.stop_recording
+replay_action_sequence = _recording_tools.replay_action_sequence
 
 __all__ = [
     # mcp server
@@ -114,16 +131,19 @@ __all__ = [
     "LoggingTools",
     "FormTools",
     "UtilityTools",
+    "RecordingTools",
     # individual tool functions
     "start_browser", "stop_browser", "get_browser_status",
     "navigate", "go_back", "go_forward", "reload_page", "get_page_info",
     "new_tab", "list_tabs", "switch_tab", "close_tab",
     "click", "type_text", "clear_input", "focus_element", "select_option", "upload_file",
+    "highlight_element", "hide_element", "remove_element",
     "find_element", "find_all_elements", "get_element_text", "get_element_attribute",
     "find_buttons", "find_inputs",
-    "get_content", "get_text_content", "get_interaction_tree", "scroll", "scroll_to_element",
+    "get_content", "get_text_content", "get_interaction_tree", "get_links", "extract_table", "extract_structured_data", "scroll", "scroll_to_element",
     "get_cookies", "set_cookie", "get_local_storage", "set_local_storage", "clear_storage",
-    "get_network_logs", "get_console_logs", "clear_logs", "wait_for_network", "wait_for_request",
+    "get_network_logs", "get_console_logs", "clear_logs", "wait_for_network", "wait_for_request", "get_network_response_body",
     "fill_form", "submit_form", "press_key", "press_enter", "mouse_click",
-    "screenshot", "execute_js", "wait", "wait_for_element", "run_security_audit",
+    "screenshot", "screenshot_element", "execute_js", "wait", "wait_for_element", "wait_for_text", "download_file", "run_security_audit",
+    "start_recording", "stop_recording", "replay_action_sequence",
 ]

@@ -15,6 +15,7 @@ class NavigationTools(ToolBase):
 
     async def navigate(self, url: str) -> str:
         """Navigate to a URL."""
+        self._record("navigate", url=url)
         await self.session.navigate(url)
         return f"Navigated to {url}"
 
