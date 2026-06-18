@@ -18,6 +18,7 @@ class FormTools(ToolBase):
 
     async def fill_form(self, form_data: str) -> str:
         """Fill a form with multiple fields. Pass JSON like '{"#email": "test@test.com"}'."""
+        self._record("fill_form", form_data=form_data)
         data = json.loads(form_data)
         filled = []
 
@@ -45,6 +46,7 @@ class FormTools(ToolBase):
 
         Properly triggers keydown, keypress, and keyup events that frameworks listen to.
         """
+        self._record("press_key", key=key, selector=selector)
         safe_key = self.escape_js_string(key)
 
         # map common key names to their codes

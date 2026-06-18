@@ -1,4 +1,5 @@
 # logging tools - network and console log management
+import base64
 import time
 from typing import Optional
 
@@ -15,6 +16,7 @@ class LoggingTools(ToolBase):
         self._mcp.tool()(self.clear_logs)
         self._mcp.tool()(self.wait_for_network)
         self._mcp.tool()(self.wait_for_request)
+        self._mcp.tool()(self.get_network_response_body)
 
     async def get_network_logs(self, limit: int = 50) -> str:
         """Get recent network request logs captured via CDP."""
@@ -132,3 +134,53 @@ class LoggingTools(ToolBase):
             await self.session.page.wait(0.2)
 
         return f"Timeout: No request matching '{url_pattern}' found after {timeout}s"
+
+    async def get_network_response_body(
+        self, url_pattern: str, method: Optional[str] = None
+    ) -> str:
+        """Get the actual response body of a captured network request.
+
+        Finds the most recent request matching the URL pattern and returns
+        its response body. Essential for intercepting API responses.
+
+        Args:
+            url_pattern: Substring to match in the URL (e.g., '/api/products', 'graphql')
+            method: Optional HTTP method filter ('GET', 'POST', etc.)
+        """
+        logs = self.session.get_network_logs(200)
+        safe_pattern = url_pattern.lower()
+        safe_method = method.upper() if method else None
+
+        # Search most recent first
+        for log in reversed(logs):
+            url = log.get('url', '').lower()
+            if safe_pattern not in url:
+                continue
+            if safe_method and log.get('method', 'GET') != safe_method:
+                continue
+
+            request_id = log.get('_request_id')
+            if not request_id:
+                continue
+
+            body_data = await self.session.get_response_body(request_id)
+
+            if 'error' in body_data:
+                return (
+                    f"Found request: {log.get('method')} {log.get('url', '')[:100]}\n"
+                    f"Status: {log.get('status')}\n"
+                    f"Error getting body: {body_data['error']}"
+                )
+
+            body = body_data['body']
+            if body_data.get('base64_encoded'):
+                body = base64.b64decode(body).decode('utf-8', errors='replace')
+
+            header = (
+                f"Request: {log.get('method')} {log.get('url', '')[:100]}\n"
+                f"Status: {log.get('status')} | Type: {log.get('mime_type', 'unknown')}\n"
+                f"---\n"
+            )
+            return header + self.truncate(body, 50000)
+
+        return f"No matching request found for: {url_pattern}"

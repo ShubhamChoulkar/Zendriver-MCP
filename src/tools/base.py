@@ -96,3 +96,7 @@ class ToolBase(ABC):
     def bool_to_yes_no(value: bool) -> str:
         """convert boolean to Yes/No string"""
         return "Yes" if value else "No"
+
+    def _record(self, action: str, **kwargs) -> None:
+        """record an action if recording is active"""
+        self._session.record_action(action, **kwargs)

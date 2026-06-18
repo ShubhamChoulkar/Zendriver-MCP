@@ -1,6 +1,8 @@
 # element interaction tools - click, type, clear, focus, select, upload
 from typing import Optional
 
+from zendriver import cdp
+
 from src.tools.base import ToolBase
 from src.errors import ElementNotFoundError
 
@@ -16,9 +18,13 @@ class ElementTools(ToolBase):
         self._mcp.tool()(self.focus_element)
         self._mcp.tool()(self.select_option)
         self._mcp.tool()(self.upload_file)
+        self._mcp.tool()(self.highlight_element)
+        self._mcp.tool()(self.hide_element)
+        self._mcp.tool()(self.remove_element)
 
     async def click(self, selector: Optional[str] = None, text: Optional[str] = None) -> str:
         """Click a visible element by CSS selector, numeric ID (from get_interaction_tree), or text content."""
+        self._record("click", selector=selector, text=text)
         if selector:
             if selector.isdigit():
                 selector = f'[data-zendriver-id="{selector}"]'
@@ -42,19 +48,26 @@ class ElementTools(ToolBase):
         return "Error: Provide selector or text"
 
     async def type_text(self, text: str, selector: str) -> str:
-        """Type text into an element using CDP Input.insertText (no JS)."""
+        """Type text into an element using CDP Input.insertText (no JS).
 
+        Works with contenteditable divs, shadow DOM inputs, and standard form fields.
+        """
+        self._record("type_text", text=text, selector=selector)
         # Make selector consistent
         if selector.isdigit():
             selector = f'[data-zendriver-id="{selector}"]'
 
         # Focus the element by clicking it
-        await self.click(selector)
+        elem = await self.get_element(selector)
+        await elem.click()
 
-        # Now insert text via CDP
-        # `self._tab` refers to the current Tab object,
-        # which exposes the CDP command interface
-        await self._tab.cdp.input_.insert_text(text)
+        try:
+            # Use CDP Input.insertText for reliable input into
+            # contenteditable elements and shadow DOM
+            await self.session.page.send(cdp.input_.insert_text(text=text))
+        except Exception:
+            # Fallback to send_keys if CDP insertText is unavailable
+            await elem.send_keys(text)
 
         return f"Typed into {selector}"
 
@@ -105,3 +118,95 @@ class ElementTools(ToolBase):
         elem = await self.get_element(selector)
         await elem.send_file(file_path)
         return f"Uploaded file '{file_path}' to: {selector}"
+
+    async def highlight_element(self, selector: str, color: str = "red", duration: float = 3.0) -> str:
+        """Highlight an element on the page for visual debugging.
+
+        Adds a bright colored outline around the element that auto-removes after the duration.
+
+        Args:
+            selector: CSS selector or numeric ID from get_interaction_tree
+            color: Outline color (default: red)
+            duration: How long to show the highlight in seconds (default: 3)
+        """
+        if selector.isdigit():
+            selector = f'[data-zendriver-id="{selector}"]'
+
+        safe_sel = self.escape_js_string(selector)
+        safe_color = self.escape_js_string(color)
+
+        result = await self.run_js(f'''
+            (function() {{
+                const el = document.querySelector("{safe_sel}");
+                if (!el) return {{ found: false }};
+
+                const prev = el.style.cssText;
+                el.style.outline = "3px solid {safe_color}";
+                el.style.outlineOffset = "2px";
+                el.style.boxShadow = "0 0 10px {safe_color}";
+
+                setTimeout(() => {{
+                    el.style.cssText = prev;
+                }}, {int(duration * 1000)});
+
+                const rect = el.getBoundingClientRect();
+                return {{
+                    found: true,
+                    tag: el.tagName,
+                    text: (el.innerText || "").substring(0, 50),
+                    position: `${{Math.round(rect.x)}},${{Math.round(rect.y)}} (${{Math.round(rect.width)}}x${{Math.round(rect.height)}})`
+                }};
+            }})()
+        ''')
+
+        if not result or not result.get('found'):
+            return f"Element not found: {selector}"
+
+        return (
+            f"Highlighted <{result['tag']}> at {result['position']}\n"
+            f"Text: {result.get('text', '(none)')}"
+        )
+
+    async def hide_element(self, selector: str) -> str:
+        """Hide an element by setting display:none. Useful for removing popups/overlays.
+
+        Args:
+            selector: CSS selector or numeric ID from get_interaction_tree
+        """
+        if selector.isdigit():
+            selector = f'[data-zendriver-id="{selector}"]'
+
+        safe_sel = self.escape_js_string(selector)
+        count = await self.run_js(f'''
+            (function() {{
+                const els = document.querySelectorAll("{safe_sel}");
+                els.forEach(el => el.style.display = "none");
+                return els.length;
+            }})()
+        ''')
+
+        if not count:
+            return f"No elements found to hide: {selector}"
+        return f"Hidden {count} element(s): {selector}"
+
+    async def remove_element(self, selector: str) -> str:
+        """Remove an element from the DOM entirely. Useful for cookie banners, ads, etc.
+
+        Args:
+            selector: CSS selector or numeric ID from get_interaction_tree
+        """
+        if selector.isdigit():
+            selector = f'[data-zendriver-id="{selector}"]'
+
+        safe_sel = self.escape_js_string(selector)
+        count = await self.run_js(f'''
+            (function() {{
+                const els = document.querySelectorAll("{safe_sel}");
+                els.forEach(el => el.remove());
+                return els.length;
+            }})()
+        ''')
+
+        if not count:
+            return f"No elements found to remove: {selector}"
+        return f"Removed {count} element(s): {selector}"
