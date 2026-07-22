@@ -6,6 +6,24 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Added
+- Schema budget guardrail (`tests/test_schema_budget.py`): fails CI
+  when total tool schema JSON exceeds 45 KB, so schema bloat cannot
+  silently return.
+
+### Changed
+- `get_content` / `get_text_content` default to 10,000 chars and take
+  `max_chars` + `offset`; the first line reports the total size and the
+  next offset so agents can paginate instead of swallowing 50k chars.
+- `get_interaction_tree` emits compact JSON (no pretty-printing) and
+  caps output at 150 elements via a new `limit` parameter.
+- `screenshot` downscales to max 1024px wide before JPEG encoding
+  (vision tokens scale with pixel area); pass `full_resolution=true`
+  for the old behavior. Files written via `save_path` keep full
+  resolution.
+- Network/console log tools default to 20 entries (was 50); network
+  lines now include the resource type.
+
 ### Fixed
 - `click(text=...)` and `human_click(text=...)` now normalize the
   picked candidate to the nearest `<a>`/`<button>`/`[role=link]`/
