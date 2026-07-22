@@ -21,7 +21,7 @@ Prior art: Anthropic's Tool Search / deferred loading mitigates schema cost in C
 - `get_text_content(max_chars: int = 10000, offset: int = 0)`, same pattern (was 30k fixed).
 - `get_interaction_tree`: compact JSON serialization (`separators=(",", ":")`, no `indent=2`) plus a node cap parameter (`limit: int = 150`) with a note in the response when the cap was hit.
 - `screenshot`: downscale to max 1024 px width (preserving aspect ratio) before JPEG encoding at quality 60. New parameter `full_resolution: bool = False` skips the downscale. Files saved via `save_path` keep original resolution.
-- `get_network_logs` / `get_console_logs`: compact one-line-per-entry format with only the fields that matter (network: method, status, resource type, truncated URL; console: level, truncated message, source). Default `limit` drops from 50 to 20.
+- `get_network_logs` / `get_console_logs`: compact one-line-per-entry format with only the fields that matter (network: method, status, resource type, truncated URL; console: level, truncated message). Default `limit` drops from 50 to 20.
 
 All changes are backwards compatible: existing call signatures keep working, only defaults get leaner.
 
@@ -44,6 +44,8 @@ Multiplex tool families behind an `action` parameter:
 Hot-path tools keep their own name and schema for model recognizability: `navigate`, `click`, `human_click`, `type_text`, `human_type`, `screenshot`, `find_element`, `get_interaction_tree`, `get_content`, `execute_js`, `wait_for_element`, and similar high-frequency tools.
 
 Alongside consolidation, docstrings get trimmed: examples and long prose move to INSTRUCTIONS.md or are dropped; each description states what the tool does and its parameters, nothing more. Target end state is roughly 30 tools and a 60-70% reduction in schema bytes.
+
+Also flagged for this pass: `execute_js` (verbose Examples block in its docstring and `json.dumps(result, indent=2)` pretty-printing every result) and `run_security_audit`'s `"="*60` banner lines.
 
 ## Error handling
 

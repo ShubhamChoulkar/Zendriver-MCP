@@ -58,3 +58,16 @@ async def test_interaction_tree_no_banner_under_limit(stub_mcp: Any) -> None:
     tools = _tools_with_page(stub_mcp, evaluate=AsyncMock(return_value=elements))
     out = await tools.get_interaction_tree()
     assert out.startswith("[{")
+
+
+async def test_get_content_offset_past_end_clamps_to_total(stub_mcp: Any) -> None:
+    tools = _tools_with_page(stub_mcp, get_content=AsyncMock(return_value="x" * 100))
+    out = await tools.get_content(offset=500)
+    assert out.startswith("[chars 100-100 of 100]")
+    assert "next:" not in out
+
+
+async def test_get_content_empty_page(stub_mcp: Any) -> None:
+    tools = _tools_with_page(stub_mcp, get_content=AsyncMock(return_value=""))
+    out = await tools.get_content()
+    assert out == "[chars 0-0 of 0]\n"

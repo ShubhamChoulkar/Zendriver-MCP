@@ -4,7 +4,7 @@ Tool schemas load into every client session's context window. Current
 main measures ~43.5 KB across 98 tools; the interim budget is 45 KB.
 After the v0.4 consolidation (Part 2 of the 2026-07-22 token spec)
 tighten BUDGET_BYTES to 20_000. If this test fails, trim docstrings or
-consolidate tools — do NOT raise the budget.
+consolidate tools - do NOT raise the budget.
 """
 
 from __future__ import annotations

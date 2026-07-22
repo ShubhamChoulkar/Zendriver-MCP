@@ -31,8 +31,8 @@ class ContentTools(ToolBase):
     def _paginate(text: str, max_chars: int, offset: int) -> str:
         """Slice ``text`` with a one-line header so agents can paginate."""
         max_chars = max(1, max_chars)
-        offset = max(0, offset)
         total = len(text)
+        offset = min(max(0, offset), total)
         chunk = text[offset : offset + max_chars]
         end = offset + len(chunk)
         header = f"[chars {offset}-{end} of {total}]"

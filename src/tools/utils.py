@@ -74,6 +74,8 @@ class UtilityTools(ToolBase):
                     if ext in [".png", ".gif", ".bmp"]:
                         with PILImage.open(tmp_path) as orig:
                             orig.save(str(resolved))
+                    elif full_res is rgb:
+                        resolved.write_bytes(jpeg_data)
                     else:
                         full_buffer = io.BytesIO()
                         full_res.save(full_buffer, format="JPEG", quality=60, optimize=True)

@@ -193,13 +193,6 @@ class ToolBase(ABC):
         return False
 
     @staticmethod
-    def truncate(text: str, max_length: int, suffix: str = "\n... (truncated)") -> str:
-        """truncate text if it exceeds max length"""
-        if len(text) > max_length:
-            return text[:max_length] + suffix
-        return text
-
-    @staticmethod
     def bool_to_yes_no(value: bool) -> str:
         """convert boolean to Yes/No string"""
         return "Yes" if value else "No"
