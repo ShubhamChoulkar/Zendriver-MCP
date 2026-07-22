@@ -11,6 +11,8 @@ from PIL import Image as PILImage
 from src.artifacts import resolve_artifact_path
 from src.tools.base import ToolBase
 
+MAX_SCREENSHOT_WIDTH = 1024
+
 
 class UtilityTools(ToolBase):
     """utility tools for screenshots, js, waiting, and security"""
@@ -23,13 +25,15 @@ class UtilityTools(ToolBase):
         self._register(self.wait_for_element)
         self._register(self.run_security_audit)
 
-    async def screenshot(self, save_path: str | None = None) -> Image:
-        """Take a screenshot of the current page and return as viewable image.
+    async def screenshot(
+        self, save_path: str | None = None, full_resolution: bool = False
+    ) -> Image:
+        """Screenshot the page as JPEG, downscaled to max 1024px wide.
 
         Args:
-            save_path: Optional path to save the screenshot to disk (e.g., "screenshot.png").
-                      If provided, saves the file and returns the image. If not provided,
-                      only returns the image data without saving to disk.
+            save_path: Optional path to also save to disk at full
+                resolution (format from the extension).
+            full_resolution: Return the image without downscaling.
         """
         if not self.session.page:
             # return red placeholder image with error
@@ -45,13 +49,20 @@ class UtilityTools(ToolBase):
             await self.session.page.save_screenshot(tmp_path)
             # compress to JPEG for smaller size (under 1MB limit)
             with PILImage.open(tmp_path) as img:
+                rgb = img.convert("RGB")
+                full_res = rgb
+                if not full_resolution and rgb.width > MAX_SCREENSHOT_WIDTH:
+                    new_height = round(rgb.height * MAX_SCREENSHOT_WIDTH / rgb.width)
+                    rgb = rgb.resize(
+                        (MAX_SCREENSHOT_WIDTH, new_height), PILImage.Resampling.LANCZOS
+                    )
                 buffer = io.BytesIO()
-                img.convert("RGB").save(buffer, format="JPEG", quality=60, optimize=True)
+                rgb.save(buffer, format="JPEG", quality=60, optimize=True)
                 jpeg_data = buffer.getvalue()
 
                 # If save_path provided, resolve through the sandbox then
-                # pick the format from the extension. Path sandbox rejects
-                # writes outside $HOME / tempdir / $ZENDRIVER_MCP_ARTIFACT_ROOT.
+                # pick the format from the extension. Saved files keep the
+                # original resolution; only the returned image is downscaled.
                 if save_path:
                     ext = os.path.splitext(save_path)[1].lower()
                     default_ext = "png" if ext in {".png", ".gif", ".bmp"} else "jpg"
@@ -64,7 +75,9 @@ class UtilityTools(ToolBase):
                         with PILImage.open(tmp_path) as orig:
                             orig.save(str(resolved))
                     else:
-                        resolved.write_bytes(jpeg_data)
+                        full_buffer = io.BytesIO()
+                        full_res.save(full_buffer, format="JPEG", quality=60, optimize=True)
+                        resolved.write_bytes(full_buffer.getvalue())
 
                 return Image(data=jpeg_data, format="jpeg")
         finally:

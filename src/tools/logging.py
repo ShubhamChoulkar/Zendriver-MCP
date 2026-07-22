@@ -15,7 +15,7 @@ class LoggingTools(ToolBase):
         self._register(self.wait_for_network)
         self._register(self.wait_for_request)
 
-    async def get_network_logs(self, limit: int = 50) -> str:
+    async def get_network_logs(self, limit: int = 20) -> str:
         """Get recent network request logs captured via CDP."""
         logs = self.session.get_network_logs(limit)
         if not logs:
@@ -26,10 +26,11 @@ class LoggingTools(ToolBase):
             method = log.get("method", "GET")
             url = log.get("url", "unknown")[:80]
             status = log.get("status", "?")
-            lines.append(f"  {method} {url} - {status}")
+            rtype = log.get("type", "")
+            lines.append(f"  {method} {url} {status} {rtype}".rstrip())
         return "\n".join(lines)
 
-    async def get_console_logs(self, limit: int = 50) -> str:
+    async def get_console_logs(self, limit: int = 20) -> str:
         """Get recent console logs captured via CDP."""
         logs = self.session.get_console_logs(limit)
         if not logs:
